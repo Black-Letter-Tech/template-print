@@ -6,10 +6,11 @@ load '../helpers/mocks'
 setup() {
   TEST_DIR=$(mktemp -d)
   MOCK_BIN_DIR="$TEST_DIR/bin"
-  TEMPLATE_DIR="$TEST_DIR/templates"
+  SHARED_TEMPLATE_DIR="$TEST_DIR/shared_templates"
+  USER_TEMPLATE_DIR="$TEST_DIR/user_templates"
   OUTPUT_DIR="$TEST_DIR/output"
   
-  mkdir -p "$MOCK_BIN_DIR" "$TEMPLATE_DIR" "$OUTPUT_DIR"
+  mkdir -p "$MOCK_BIN_DIR" "$SHARED_TEMPLATE_DIR" "$USER_TEMPLATE_DIR" "$OUTPUT_DIR"
   
   # Create more realistic mocks
   # Mock qpdf that creates a simple output
@@ -34,22 +35,35 @@ EOF
   # Mock defaults
   mock_defaults "$MOCK_BIN_DIR" "$TEST_DIR/defaults.plist"
   
-  # Mock osascript (silent for tests)
+  # Mock osascript to return template and printer choices
   cat > "$MOCK_BIN_DIR/osascript" <<'EOF'
 #!/bin/bash
-# Silent mock - just return success
-exit 0
+# Mock osascript that returns template and printer choices
+if [[ "$*" == *"choose from list"* ]] && [[ "$*" == *"Select a template"* ]]; then
+  # Return template choice
+  echo "template.pdf"
+elif [[ "$*" == *"choose from list"* ]] && [[ "$*" == *"Select a printer"* ]]; then
+  # Return printer choice
+  echo "printer1"
+elif [[ "$*" == *"display notification"* ]]; then
+  # Silent for notifications
+  exit 0
+else
+  # Silent for other dialogs
+  exit 0
+fi
 EOF
   chmod +x "$MOCK_BIN_DIR/osascript"
   
   export PATH="$MOCK_BIN_DIR:$PATH"
+  export HOME="$TEST_DIR"
   
   # Create test files
   echo "test input pdf" > "$OUTPUT_DIR/input.pdf"
-  echo "test template pdf" > "$TEMPLATE_DIR/template.pdf"
+  echo "test template pdf" > "$SHARED_TEMPLATE_DIR/template.pdf"
   
   SCRIPT_DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")/../.." && pwd)"
-  SCRIPT="$SCRIPT_DIR/files/template-print.sh"
+  SCRIPT="$SCRIPT_DIR/workflow/TemplatePrint.workflow/Contents/Scripts/template-print.sh"
 }
 
 teardown() {
@@ -57,11 +71,8 @@ teardown() {
 }
 
 @test "full workflow: template + input -> print" {
-  # Test the complete flow
-  run "$SCRIPT" \
-    --template "$TEMPLATE_DIR/template.pdf" \
-    --mode underlay \
-    "$OUTPUT_DIR/input.pdf"
+  # Test the complete flow (workflow script with dialogs)
+  run "$SCRIPT" "$OUTPUT_DIR/input.pdf"
   
   # Should have called qpdf
   [[ $output == *"qpdf"* ]]
@@ -69,28 +80,64 @@ teardown() {
   [[ $output == *"lp"* ]]
 }
 
-@test "workflow with template directory" {
-  export TEMPLATE_PRINT_DIR="$TEMPLATE_DIR"
+@test "workflow discovers templates from shared location" {
+  # Create template in shared location
+  echo "shared template" > "$SHARED_TEMPLATE_DIR/shared.pdf"
   
-  run "$SCRIPT" \
-    --template template.pdf \
-    "$OUTPUT_DIR/input.pdf"
+  run "$SCRIPT" "$OUTPUT_DIR/input.pdf"
   
-  # Should succeed (or at least get to qpdf)
+  # Should discover and use template
   [[ $output == *"qpdf"* ]]
 }
 
-@test "workflow preserves last template choice" {
-  export TEMPLATE_PRINT_DIR="$TEMPLATE_DIR"
+@test "workflow discovers templates from user location" {
+  # Create template in user location
+  echo "user template" > "$USER_TEMPLATE_DIR/user.pdf"
   
-  # First run with a template
-  run "$SCRIPT" \
-    --template "$TEMPLATE_DIR/template.pdf" \
-    --remember 1 \
-    "$OUTPUT_DIR/input.pdf"
+  # Update mock to return user template
+  cat > "$MOCK_BIN_DIR/osascript" <<'EOF'
+#!/bin/bash
+if [[ "$*" == *"Select a template"* ]]; then
+  echo "user.pdf"
+elif [[ "$*" == *"Select a printer"* ]]; then
+  echo "printer1"
+fi
+EOF
+  chmod +x "$MOCK_BIN_DIR/osascript"
   
-  # Should have stored the template path
-  # (This would require checking defaults, which is mocked)
-  [[ $status -eq 0 ]] || [[ $status -eq 1 ]]  # May fail on actual execution
+  run "$SCRIPT" "$OUTPUT_DIR/input.pdf"
+  
+  # Should discover and use template
+  [[ $output == *"qpdf"* ]]
 }
 
+@test "workflow merges templates from both locations" {
+  # Create templates in both locations
+  echo "shared template" > "$SHARED_TEMPLATE_DIR/shared.pdf"
+  echo "user template" > "$USER_TEMPLATE_DIR/user.pdf"
+  
+  run "$SCRIPT" "$OUTPUT_DIR/input.pdf"
+  
+  # Should discover templates from both locations
+  [[ $output == *"qpdf"* ]]
+}
+
+@test "workflow preserves last template and printer choice" {
+  # Set up defaults to remember last template and printer
+  mkdir -p "$TEST_DIR/Library/Preferences"
+  cat > "$TEST_DIR/defaults.plist" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>lastTemplatePath</key>
+  <string>template.pdf</string>
+  <key>lastPrinterName</key>
+  <string>printer1</string>
+</dict></plist>
+EOF
+  
+  run "$SCRIPT" "$OUTPUT_DIR/input.pdf"
+  
+  # Should use remembered choices
+  [[ $output == *"qpdf"* ]]
+}

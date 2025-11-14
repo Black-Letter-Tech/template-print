@@ -2,82 +2,89 @@
 set -euo pipefail
 
 PKG_ID="com.blacklettertech.template-print"
-BIN_DEST="/usr/local/bin/template-print"
-WORKFLOW_DEST="/Library/PDF Services/TemplatePrint.workflow"
-EXAMPLES_STAGING="/Library/Application Support/template-print/examples"
-EXAMPLES_DEST="/Users/Shared/PDFTemplates/examples"
-UNINSTALLER_APP="/Applications/Utilities/Template Print Uninstaller.app"
+USER_HOME="${HOME:-}"
+
+# Get the package root (where files are staged during install)
+PACKAGE_ROOT="${1:-/}"
 
 log() {
     echo "[$PKG_ID] $*" >&2
 }
 
-# pkgbuild installs files automatically, we just need to ensure permissions and move examples
-log "Setting up installed files..."
+# User-space installation paths
+USER_WORKFLOW_DEST="${USER_HOME}/Library/PDF Services/TemplatePrint.workflow"
+USER_QPDF_BIN="${USER_HOME}/Library/Application Support/template-print/bin/qpdf"
+USER_QPDF_LIB_DIR="${USER_HOME}/Library/Application Support/template-print/lib"
+USER_UNINSTALLER_APP="${USER_HOME}/Applications/Template Print Uninstaller.app"
+SHARED_TEMPLATE_DIR="/Users/Shared/Shared PDF Templates"
+USER_TEMPLATE_DIR="${USER_HOME}/My PDF Templates"
 
-# Ensure binary is executable
-if [[ -f "$BIN_DEST" ]]; then
-    chmod 755 "$BIN_DEST"
-    log "Binary installed: $BIN_DEST"
-else
-    log "Warning: Binary not found at $BIN_DEST"
+# System staging paths (where pkgbuild installs)
+STAGING_WORKFLOW="/Library/PDF Services/TemplatePrint.workflow"
+STAGING_QPDF_BIN="/Library/Application Support/template-print/bin/qpdf"
+STAGING_QPDF_LIB_DIR="/Library/Application Support/template-print/lib"
+STAGING_UNINSTALLER="/Applications/Template Print Uninstaller.app"
+
+log "Installing Template Print to user-space locations..."
+
+# Move workflow to user-space
+if [[ -d "${PACKAGE_ROOT}${STAGING_WORKFLOW}" ]] || [[ -d "${STAGING_WORKFLOW}" ]]; then
+    source_workflow="${PACKAGE_ROOT}${STAGING_WORKFLOW}"
+    [[ ! -d "$source_workflow" ]] && source_workflow="${STAGING_WORKFLOW}"
+    
+    mkdir -p "$(dirname "$USER_WORKFLOW_DEST")"
+    if [[ -d "$USER_WORKFLOW_DEST" ]]; then
+        rm -rf "$USER_WORKFLOW_DEST"
+    fi
+    cp -R "$source_workflow" "$USER_WORKFLOW_DEST"
+    chmod -R 755 "$USER_WORKFLOW_DEST"
+    log "Workflow installed: $USER_WORKFLOW_DEST"
 fi
 
-# Ensure bundled qpdf has correct permissions
-QPDF_BIN="/Library/Application Support/template-print/bin/qpdf"
-QPDF_LIB_DIR="/Library/Application Support/template-print/lib"
-if [[ -f "$QPDF_BIN" ]]; then
-    chmod 755 "$QPDF_BIN"
-    log "Bundled qpdf installed: $QPDF_BIN"
+# Move qpdf to user-space
+if [[ -f "${PACKAGE_ROOT}${STAGING_QPDF_BIN}" ]] || [[ -f "${STAGING_QPDF_BIN}" ]]; then
+    source_qpdf="${PACKAGE_ROOT}${STAGING_QPDF_BIN}"
+    [[ ! -f "$source_qpdf" ]] && source_qpdf="${STAGING_QPDF_BIN}"
     
-    # Set permissions on bundled libraries if they exist
-    if [[ -d "$QPDF_LIB_DIR" ]]; then
-        chmod -R 755 "$QPDF_LIB_DIR"
-        log "Bundled qpdf libraries installed: $QPDF_LIB_DIR"
+    mkdir -p "$(dirname "$USER_QPDF_BIN")"
+    cp "$source_qpdf" "$USER_QPDF_BIN"
+    chmod 755 "$USER_QPDF_BIN"
+    log "qpdf installed: $USER_QPDF_BIN"
+    
+    # Move qpdf libraries
+    source_lib="${PACKAGE_ROOT}${STAGING_QPDF_LIB_DIR}"
+    [[ ! -d "$source_lib" ]] && source_lib="${STAGING_QPDF_LIB_DIR}"
+    
+    if [[ -d "$source_lib" ]] && [[ -n "$(ls -A "$source_lib" 2>/dev/null)" ]]; then
+        mkdir -p "$USER_QPDF_LIB_DIR"
+        cp -R "$source_lib/"* "$USER_QPDF_LIB_DIR/" 2>/dev/null || true
+        chmod -R 755 "$USER_QPDF_LIB_DIR"
+        log "qpdf libraries installed: $USER_QPDF_LIB_DIR"
     fi
 fi
 
-# Ensure workflow has correct permissions
-if [[ -d "$WORKFLOW_DEST" ]]; then
-    chmod -R 755 "$WORKFLOW_DEST"
-    log "Workflow installed: $WORKFLOW_DEST"
-else
-    log "Warning: Workflow not found at $WORKFLOW_DEST"
+# Move uninstaller to user-space
+if [[ -d "${PACKAGE_ROOT}${STAGING_UNINSTALLER}" ]] || [[ -d "${STAGING_UNINSTALLER}" ]]; then
+    source_uninstaller="${PACKAGE_ROOT}${STAGING_UNINSTALLER}"
+    [[ ! -d "$source_uninstaller" ]] && source_uninstaller="${STAGING_UNINSTALLER}"
+    
+    mkdir -p "$(dirname "$USER_UNINSTALLER_APP")"
+    if [[ -d "$USER_UNINSTALLER_APP" ]]; then
+        rm -rf "$USER_UNINSTALLER_APP"
+    fi
+    cp -R "$source_uninstaller" "$USER_UNINSTALLER_APP"
+    chmod -R 755 "$USER_UNINSTALLER_APP"
+    log "Uninstaller installed: $USER_UNINSTALLER_APP"
 fi
 
-# Move examples from staging to /Users/Shared/PDFTemplates/examples
-if [[ -d "$EXAMPLES_STAGING" ]]; then
-    # Create destination directory if it doesn't exist
-    mkdir -p "$(dirname "$EXAMPLES_DEST")"
-    
-    # Remove existing examples directory if it exists
-    if [[ -d "$EXAMPLES_DEST" ]]; then
-        rm -rf "$EXAMPLES_DEST"
-    fi
-    
-    # Move examples to final location
-    mv "$EXAMPLES_STAGING" "$EXAMPLES_DEST"
-    chmod -R 755 "$EXAMPLES_DEST"
-    log "Examples installed: $EXAMPLES_DEST"
-    
-    # Clean up staging directory structure (only if empty)
-    STAGING_PARENT="$(dirname "$EXAMPLES_STAGING")"
-    if [[ -d "$STAGING_PARENT" ]] && [[ -z "$(ls -A "$STAGING_PARENT" 2>/dev/null)" ]]; then
-        rmdir "$STAGING_PARENT" 2>/dev/null || true
-    fi
-    STAGING_ROOT="/Library/Application Support/template-print"
-    if [[ -d "$STAGING_ROOT" ]] && [[ -z "$(ls -A "$STAGING_ROOT" 2>/dev/null)" ]]; then
-        rmdir "$STAGING_ROOT" 2>/dev/null || true
-    fi
-fi
+# Create template directories
+mkdir -p "$SHARED_TEMPLATE_DIR"
+chmod 755 "$SHARED_TEMPLATE_DIR" 2>/dev/null || true
+log "Shared template directory: $SHARED_TEMPLATE_DIR"
 
-# Ensure uninstaller app has correct permissions
-if [[ -d "$UNINSTALLER_APP" ]]; then
-    chmod -R 755 "$UNINSTALLER_APP"
-    log "Uninstaller installed: $UNINSTALLER_APP"
-else
-    log "Warning: Uninstaller not found at $UNINSTALLER_APP"
-fi
+mkdir -p "$USER_TEMPLATE_DIR"
+chmod 755 "$USER_TEMPLATE_DIR"
+log "User template directory: $USER_TEMPLATE_DIR"
 
-log "Installation complete. Template Print is available system-wide."
+log "Installation complete. Template Print is installed for user: ${USER_HOME}"
 exit 0

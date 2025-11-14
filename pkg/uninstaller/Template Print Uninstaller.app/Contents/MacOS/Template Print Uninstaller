@@ -1,29 +1,21 @@
 #!/bin/bash
 set -euo pipefail
 
-BIN_DEST="/usr/local/bin/template-print"
-WORKFLOW_DEST="/Library/PDF Services/TemplatePrint.workflow"
-EXAMPLES_DEST="/Users/Shared/PDFTemplates/examples"
-QPDF_BIN="/Library/Application Support/template-print/bin/qpdf"
-QPDF_LIB_DIR="/Library/Application Support/template-print/lib"
-QPDF_SUPPORT_DIR="/Library/Application Support/template-print"
-UNINSTALLER_APP="/Applications/Utilities/Template Print Uninstaller.app"
-
-# Check for admin privileges
-if [[ $EUID -ne 0 ]]; then
-    # Not running as root, try to elevate
-    osascript -e 'do shell script "bash \"'$0'\" 2>&1" with administrator privileges' 2>/dev/null
-    exit $?
-fi
+# User-space paths (no sudo required)
+WORKFLOW_DEST="${HOME}/Library/PDF Services/TemplatePrint.workflow"
+QPDF_BIN="${HOME}/Library/Application Support/template-print/bin/qpdf"
+QPDF_LIB_DIR="${HOME}/Library/Application Support/template-print/lib"
+QPDF_SUPPORT_DIR="${HOME}/Library/Application Support/template-print"
+UNINSTALLER_APP="${HOME}/Applications/Template Print Uninstaller.app"
+DEFAULTS_DOMAIN="com.blacklettertech.template-print"
 
 # Confirm uninstallation
-response=$(osascript <<'EOF'
-set response to button returned of (display dialog "This will remove Template Print from your system:
+response=$(osascript <<EOF
+set response to button returned of (display dialog "This will remove Template Print from your account:
 
-• Binary: /usr/local/bin/template-print
-• Workflow: /Library/PDF Services/TemplatePrint.workflow
-• Examples: /Users/Shared/PDFTemplates/examples
-• Bundled qpdf: /Library/Application Support/template-print/
+• Workflow: ~/Library/PDF Services/TemplatePrint.workflow
+• Bundled qpdf: ~/Library/Application Support/template-print/
+• Preferences: com.blacklettertech.template-print
 
 Continue with uninstallation?" buttons {"Cancel", "Uninstall"} default button "Cancel" cancel button "Cancel" with icon caution)
 return response
@@ -35,25 +27,13 @@ if [[ "$response" != "Uninstall" ]]; then
     exit 0
 fi
 
-# Remove files
-if [[ -f "$BIN_DEST" ]]; then
-    rm -f "$BIN_DEST"
-    echo "Removed binary: $BIN_DEST"
-fi
-
+# Remove workflow
 if [[ -d "$WORKFLOW_DEST" ]]; then
     rm -rf "$WORKFLOW_DEST"
     echo "Removed workflow: $WORKFLOW_DEST"
 fi
 
-if [[ -d "$EXAMPLES_DEST" ]]; then
-    rm -rf "$EXAMPLES_DEST"
-    echo "Removed examples: $EXAMPLES_DEST"
-    # Clean up parent directory if it's empty (but don't remove /Users/Shared/PDFTemplates if user has other files)
-    rmdir "$(dirname "$EXAMPLES_DEST")" 2>/dev/null || true
-fi
-
-# Remove bundled qpdf (only our bundled version, not system/Homebrew installations)
+# Remove bundled qpdf
 if [[ -f "$QPDF_BIN" ]]; then
     rm -f "$QPDF_BIN"
     echo "Removed bundled qpdf: $QPDF_BIN"
@@ -64,14 +44,17 @@ if [[ -d "$QPDF_LIB_DIR" ]]; then
     echo "Removed bundled qpdf libraries: $QPDF_LIB_DIR"
 fi
 
-# Remove Application Support directory if empty (but only if it's our directory)
+# Remove Application Support directory if empty
 if [[ -d "$QPDF_SUPPORT_DIR" ]]; then
-    # Check if directory is empty (only our files should be there)
     if [[ -z "$(ls -A "$QPDF_SUPPORT_DIR" 2>/dev/null)" ]]; then
         rmdir "$QPDF_SUPPORT_DIR" 2>/dev/null || true
         echo "Removed Application Support directory: $QPDF_SUPPORT_DIR"
     fi
 fi
+
+# Remove user defaults
+defaults delete "$DEFAULTS_DOMAIN" >/dev/null 2>&1 || true
+echo "Removed preferences: $DEFAULTS_DOMAIN"
 
 # Remove uninstaller itself
 if [[ -d "$UNINSTALLER_APP" ]]; then
@@ -79,5 +62,5 @@ if [[ -d "$UNINSTALLER_APP" ]]; then
     echo "Removed uninstaller: $UNINSTALLER_APP"
 fi
 
-osascript -e 'display dialog "Template Print has been successfully uninstalled from your system." buttons {"OK"} default button "OK"'
+osascript -e 'display dialog "Template Print has been successfully uninstalled from your account." buttons {"OK"} default button "OK"'
 exit 0

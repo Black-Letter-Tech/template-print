@@ -106,11 +106,11 @@ build_qpdf() {
     cd "$build_dir"
     
     # Configure with cmake
-    log "Configuring qpdf build..."
+    log "Configuring qpdf build (universal binary: arm64 + x86_64)..."
     cmake "$source_dir" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX="$install_dir" \
-        -DCMAKE_OSX_ARCHITECTURES="$(detect_arch)" \
+        -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
         -DBUILD_SHARED_LIBS=OFF \
         -DREQUIRE_CRYPTO_NATIVE=ON
     

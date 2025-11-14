@@ -7,13 +7,12 @@ DEST_DIR="${HOME}/Library/PDF Services"
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [--source PATH] [--symlink]
+Usage: $(basename "$0") [--source PATH]
 
-Copies or symlinks the ${WORKFLOW_NAME} bundle into ${DEST_DIR}.
+Copies the ${WORKFLOW_NAME} bundle into ${DEST_DIR}.
 
 Options:
   --source PATH   Explicit path to the workflow bundle.
-  --symlink       Create a symlink instead of copying (useful for development).
   -h, --help      Show this help message.
 EOF
 }
@@ -65,17 +64,12 @@ resolve_workflow() {
 }
 
 SOURCE_OVERRIDE=""
-USE_SYMLINK=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --source)
       [[ $# -ge 2 ]] || fail "Missing path after --source."
       SOURCE_OVERRIDE="$2"
       shift 2
-      ;;
-    --symlink)
-      USE_SYMLINK=true
-      shift
       ;;
     -h|--help)
       usage
@@ -91,19 +85,13 @@ WORKFLOW_SRC="$(resolve_workflow "${SOURCE_OVERRIDE}")"
 
 mkdir -p "${DEST_DIR}"
 
-# Remove existing workflow (directory or symlink) if it exists
+# Remove existing workflow if it exists
 if [[ -e "${DEST_DIR}/${WORKFLOW_NAME}" ]]; then
   rm -rf "${DEST_DIR}/${WORKFLOW_NAME}"
 fi
 
-if [[ "${USE_SYMLINK}" == "true" ]]; then
-  log "Creating symlink for '${WORKFLOW_NAME}' in '${DEST_DIR}'"
-  ln -sf "${WORKFLOW_SRC}" "${DEST_DIR}/${WORKFLOW_NAME}"
-  log "Symlink created. Changes to source workflow will be immediately available."
-else
-  log "Installing '${WORKFLOW_NAME}' to '${DEST_DIR}'"
-  rsync -a --delete "${WORKFLOW_SRC}/" "${DEST_DIR}/${WORKFLOW_NAME}/"
-fi
+log "Installing '${WORKFLOW_NAME}' to '${DEST_DIR}'"
+rsync -a --delete "${WORKFLOW_SRC}/" "${DEST_DIR}/${WORKFLOW_NAME}/"
 
 log "Workflow installed. It will appear under Print → PDF → Template Print after restarting the print dialog."
 

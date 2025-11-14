@@ -135,24 +135,17 @@ bundle_qpdf() {
 # Clean and prepare directories
 log "Preparing build directories..."
 rm -rf "$PAYLOAD_DIR"
-mkdir -p "$PAYLOAD_DIR/usr/local/bin"
+# Staging directories for user-space installation (postinstall will handle actual user paths)
 mkdir -p "$PAYLOAD_DIR/Library/PDF Services"
 mkdir -p "$PAYLOAD_DIR/Library/Application Support/template-print/bin"
 mkdir -p "$PAYLOAD_DIR/Library/Application Support/template-print/lib"
-mkdir -p "$PAYLOAD_DIR/Applications/Utilities"
+mkdir -p "$PAYLOAD_DIR/Applications"
 mkdir -p "$DIST_DIR"
 
 # Stage files
 log "Staging files..."
-cp "$PROJECT_ROOT/files/template-print.sh" "$PAYLOAD_DIR/usr/local/bin/template-print"
-chmod 755 "$PAYLOAD_DIR/usr/local/bin/template-print"
-
+# Workflow will be installed to ~/Library/PDF Services/ in postinstall
 cp -R "$PROJECT_ROOT/workflow/TemplatePrint.workflow" "$PAYLOAD_DIR/Library/PDF Services/"
-
-# Stage examples in Application Support (will be moved to /Users/Shared/PDFTemplates/examples in postinstall)
-if [[ -d "$PROJECT_ROOT/examples" ]]; then
-    cp -R "$PROJECT_ROOT/examples" "$PAYLOAD_DIR/Library/Application Support/template-print/"
-fi
 
 # Bundle qpdf
 log "Bundling qpdf..."
@@ -166,7 +159,8 @@ else
     exit 1
 fi
 
-cp -R "$PROJECT_ROOT/pkg/uninstaller/Template Print Uninstaller.app" "$PAYLOAD_DIR/Applications/Utilities/"
+# Uninstaller will be installed to ~/Applications/ in postinstall
+cp -R "$PROJECT_ROOT/pkg/uninstaller/Template Print Uninstaller.app" "$PAYLOAD_DIR/Applications/"
 
 # Build the package
 log "Building package..."

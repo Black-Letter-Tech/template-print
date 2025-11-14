@@ -62,33 +62,39 @@
 					<string><![CDATA[# template-print Automator entry point
 set -euo pipefail
 
-# Check system-wide installation first (from .pkg installer)
-if [[ -x "/usr/local/bin/template-print" ]]; then
-  exec "/usr/local/bin/template-print" --choose "$@"
+# Workflow bundle path (user-space installation)
+WORKFLOW_DIR="${HOME}/Library/PDF Services/TemplatePrint.workflow"
+
+# Debug logging
+DEBUG_LOG="${HOME}/Library/Logs/template-print-debug.log"
+{
+  echo "=== Template Print Debug $(date) ==="
+  echo "WORKFLOW_DIR: ${WORKFLOW_DIR}"
+  echo "Number of PDF files: $#"
+  echo "PDF files in \$@:"
+  i=1
+  for pdf_file in "$@"; do
+    echo "  [$i] $pdf_file"
+    i=$((i + 1))
+  done
+} >> "$DEBUG_LOG" 2>&1
+
+# Resolve the script path
+SCRIPT="${WORKFLOW_DIR}/Contents/Scripts/template-print.sh"
+
+# Check if script exists
+if [[ ! -f "$SCRIPT" ]]; then
+  echo "ERROR: Script not found at $SCRIPT" >> "$DEBUG_LOG" 2>&1
+  /usr/bin/osascript -e 'display dialog "Template Print script not found.\n\nPlease reinstall Template Print." buttons {"OK"} default button "OK" with icon caution' >/dev/null 2>&1
+  exit 1
 fi
 
-# Check Homebrew installation (backwards compatibility)
-prefix="${HOMEBREW_PREFIX:-}"
-if [[ -z "${prefix}" ]]; then
-  if command -v brew >/dev/null 2>&1; then
-    prefix="$(brew --prefix)"
-  elif [[ -x "/opt/homebrew/bin/template-print" ]]; then
-    prefix="/opt/homebrew"
-  fi
-fi
+echo "SCRIPT path: $SCRIPT" >> "$DEBUG_LOG" 2>&1
+echo "Executing script with PDF files..." >> "$DEBUG_LOG" 2>&1
 
-if [[ -n "${prefix}" && -x "${prefix}/bin/template-print" ]]; then
-  exec "${prefix}/bin/template-print" --choose "$@"
-fi
-
-# Check PATH
-if command -v template-print >/dev/null 2>&1; then
-  exec "$(command -v template-print)" --choose "$@"
-fi
-
-# Not found - show error
-/usr/bin/osascript -e 'display dialog "template-print is not installed.\n\nDownload and install the .pkg from:\nhttps://github.com/Black-Letter-Tech/template-print/releases\n\nOr install via command line:\nsudo installer -pkg <path-to-pkg> -target /" buttons {"OK"} default button "OK" with icon caution' >/dev/null 2>&1
-exit 1
+# Execute the bundled script with the PDF file path
+# PDF Services typically passes one file at a time
+exec "$SCRIPT" "$@"
 ]]></string>
 					<key>CheckedForUserDefaultShell</key>
 					<true/>

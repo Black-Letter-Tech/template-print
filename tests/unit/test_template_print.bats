@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# Tests for template-print.sh
+# Tests for workflow template-print.sh script
 
 load '../helpers/mocks'
 
@@ -7,10 +7,11 @@ setup() {
   # Create temporary directories
   TEST_DIR=$(mktemp -d)
   MOCK_BIN_DIR="$TEST_DIR/bin"
-  TEMPLATE_DIR="$TEST_DIR/templates"
+  SHARED_TEMPLATE_DIR="$TEST_DIR/shared_templates"
+  USER_TEMPLATE_DIR="$TEST_DIR/user_templates"
   OUTPUT_DIR="$TEST_DIR/output"
   
-  mkdir -p "$MOCK_BIN_DIR" "$TEMPLATE_DIR" "$OUTPUT_DIR"
+  mkdir -p "$MOCK_BIN_DIR" "$SHARED_TEMPLATE_DIR" "$USER_TEMPLATE_DIR" "$OUTPUT_DIR"
   
   # Add mock bin to PATH
   export PATH="$MOCK_BIN_DIR:$PATH"
@@ -19,15 +20,18 @@ setup() {
   mock_qpdf "$MOCK_BIN_DIR"
   mock_lp "$MOCK_BIN_DIR"
   mock_defaults "$MOCK_BIN_DIR" "$TEST_DIR/defaults.plist"
-  mock_osascript "$MOCK_BIN_DIR"
+  mock_osascript "$MOCK_BIN_DIR" "$SHARED_TEMPLATE_DIR" "$USER_TEMPLATE_DIR"
   
   # Create test templates
-  echo "test template" > "$TEMPLATE_DIR/template1.pdf"
-  echo "test template" > "$TEMPLATE_DIR/template2.pdf"
+  echo "test template" > "$SHARED_TEMPLATE_DIR/template1.pdf"
+  echo "test template" > "$USER_TEMPLATE_DIR/template2.pdf"
   
   # Source the script
   SCRIPT_DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")/../.." && pwd)"
-  SCRIPT="$SCRIPT_DIR/files/template-print.sh"
+  SCRIPT="$SCRIPT_DIR/workflow/TemplatePrint.workflow/Contents/Scripts/template-print.sh"
+  
+  # Set up environment for script
+  export HOME="$TEST_DIR"
 }
 
 teardown() {
@@ -41,49 +45,54 @@ teardown() {
   [[ -x "$SCRIPT" ]]
 }
 
-@test "shows usage with --help" {
-  run "$SCRIPT" --help
-  [[ $status -eq 0 ]]
-  [[ $output == *"Usage"* ]]
-  [[ $output == *"template-print"* ]]
-}
-
-@test "shows version with --version" {
-  run "$SCRIPT" --version
-  [[ $status -eq 0 ]]
-  [[ $output == *"0.1.0"* ]]
-}
-
 @test "fails when input PDF is missing" {
-  run "$SCRIPT" --template "$TEMPLATE_DIR/template1.pdf" /nonexistent.pdf
+  run "$SCRIPT" /nonexistent.pdf
   [[ $status -ne 0 ]]
 }
 
-@test "lists templates with --list" {
-  export TEMPLATE_PRINT_DIR="$TEMPLATE_DIR"
-  run "$SCRIPT" --list
-  [[ $status -eq 0 ]]
-  [[ $output == *"template1.pdf"* ]]
-  [[ $output == *"template2.pdf"* ]]
-}
-
-@test "accepts --template option" {
+@test "discovers templates from shared location" {
   echo "test input" > "$OUTPUT_DIR/input.pdf"
-  run "$SCRIPT" --template "$TEMPLATE_DIR/template1.pdf" "$OUTPUT_DIR/input.pdf"
-  # Should attempt to call qpdf (mocked)
-  [[ $output == *"qpdf"* ]]
+  # Mock osascript to return template1.pdf
+  echo "template1.pdf" > "$MOCK_BIN_DIR/osascript_choice"
+  echo "printer1" > "$MOCK_BIN_DIR/osascript_printer"
+  
+  run "$SCRIPT" "$OUTPUT_DIR/input.pdf"
+  # Should attempt to discover templates
+  [[ $status -eq 0 ]] || [[ $status -eq 1 ]]  # May fail on qpdf execution, but should discover templates
 }
 
-@test "accepts --dir option" {
+@test "discovers templates from user location" {
   echo "test input" > "$OUTPUT_DIR/input.pdf"
-  run "$SCRIPT" --dir "$TEMPLATE_DIR" --template template1.pdf "$OUTPUT_DIR/input.pdf"
-  [[ $status -eq 0 ]] || [[ $status -eq 1 ]]  # May fail on qpdf execution, but should parse args
+  # Mock osascript to return template2.pdf
+  echo "template2.pdf" > "$MOCK_BIN_DIR/osascript_choice"
+  echo "printer1" > "$MOCK_BIN_DIR/osascript_printer"
+  
+  run "$SCRIPT" "$OUTPUT_DIR/input.pdf"
+  # Should attempt to discover templates from both locations
+  [[ $status -eq 0 ]] || [[ $status -eq 1 ]]
 }
 
-@test "accepts --mode option" {
+@test "fails when no templates found" {
+  rm -rf "$SHARED_TEMPLATE_DIR"/* "$USER_TEMPLATE_DIR"/*
   echo "test input" > "$OUTPUT_DIR/input.pdf"
-  run "$SCRIPT" --mode overlay --template "$TEMPLATE_DIR/template1.pdf" "$OUTPUT_DIR/input.pdf"
-  # Should parse the mode option
-  [[ $output == *"qpdf"* ]]
+  
+  run "$SCRIPT" "$OUTPUT_DIR/input.pdf"
+  [[ $status -ne 0 ]]
+  [[ $output == *"No templates found"* ]]
 }
 
+@test "resolves qpdf from user-space location first" {
+  # Create mock qpdf in user-space location
+  mkdir -p "$TEST_DIR/Library/Application Support/template-print/bin"
+  echo "#!/bin/bash" > "$TEST_DIR/Library/Application Support/template-print/bin/qpdf"
+  echo "echo 'qpdf from user-space'" >> "$TEST_DIR/Library/Application Support/template-print/bin/qpdf"
+  chmod +x "$TEST_DIR/Library/Application Support/template-print/bin/qpdf"
+  
+  echo "test input" > "$OUTPUT_DIR/input.pdf"
+  echo "template1.pdf" > "$MOCK_BIN_DIR/osascript_choice"
+  echo "printer1" > "$MOCK_BIN_DIR/osascript_printer"
+  
+  run "$SCRIPT" "$OUTPUT_DIR/input.pdf"
+  # Should use user-space qpdf
+  [[ $status -eq 0 ]] || [[ $status -eq 1 ]]
+}

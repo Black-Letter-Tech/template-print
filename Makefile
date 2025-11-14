@@ -5,11 +5,11 @@ DIST_DIR := dist
 ARCHIVE := template-print-$(VERSION).tar.gz
 PKG_SCRIPT := pkg/build_pkg.sh
 
-.PHONY: lint pkg pkg-macos archive install-workflow uninstall-workflow install-dev uninstall-dev prepare-qpdf clean-qpdf test test-unit test-integration clean distclean
+.PHONY: lint pkg pkg-macos archive install-workflow uninstall-workflow prepare-qpdf clean-qpdf test test-unit test-integration clean distclean
 
 lint:
 	@command -v shellcheck >/dev/null 2>&1 || { echo "shellcheck is required for linting" >&2; exit 1; }
-	shellcheck files/template-print.sh scripts/install_workflow.sh scripts/uninstall_workflow.sh scripts/prepare_qpdf.sh pkg/scripts/postinstall pkg/build_pkg.sh
+	shellcheck workflow/TemplatePrint.workflow/Contents/Scripts/template-print.sh scripts/install_workflow.sh scripts/uninstall_workflow.sh scripts/prepare_qpdf.sh pkg/scripts/postinstall pkg/build_pkg.sh
 
 pkg: pkg-macos
 
@@ -36,23 +36,6 @@ install-workflow:
 
 uninstall-workflow:
 	bash scripts/uninstall_workflow.sh -y
-
-install-dev:
-	@echo "Installing development symlinks..."
-	@mkdir -p /usr/local/bin
-	@ln -sf "$(CURDIR)/files/template-print.sh" /usr/local/bin/template-print
-	@echo "Symlinked template-print.sh to /usr/local/bin/template-print"
-	@bash scripts/install_workflow.sh --symlink
-	@echo "Development installation complete. Changes to source files will be immediately available."
-
-uninstall-dev:
-	@echo "Removing development symlinks..."
-	@if [ -L /usr/local/bin/template-print ]; then \
-		rm /usr/local/bin/template-print; \
-		echo "Removed symlink: /usr/local/bin/template-print"; \
-	fi
-	@bash scripts/uninstall_workflow.sh -y
-	@echo "Development uninstallation complete."
 
 prepare-qpdf:
 	@echo "Preparing qpdf from source (this may take several minutes)..."
