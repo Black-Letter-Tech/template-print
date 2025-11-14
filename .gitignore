@@ -4,6 +4,9 @@ dist/
 out/
 tmp/
 .cache/
+pkg/qpdf-bundled/
+pkg/qpdf-build/
+pkg/payload/
 
 # Archives
 *.zip
@@ -32,3 +35,6 @@ files/**/.DS_Store
 .vscode/
 *.swp
 *.swo
+legacy/README.md
+legacy/release-homebrew.yml
+legacy/Formula/template-print.rb

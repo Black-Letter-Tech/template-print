@@ -4,6 +4,9 @@ set -euo pipefail
 BIN_DEST="/usr/local/bin/template-print"
 WORKFLOW_DEST="/Library/PDF Services/TemplatePrint.workflow"
 EXAMPLES_DEST="/Users/Shared/PDFTemplates/examples"
+QPDF_BIN="/Library/Application Support/template-print/bin/qpdf"
+QPDF_LIB_DIR="/Library/Application Support/template-print/lib"
+QPDF_SUPPORT_DIR="/Library/Application Support/template-print"
 UNINSTALLER_APP="/Applications/Utilities/Template Print Uninstaller.app"
 
 # Check for admin privileges
@@ -20,6 +23,7 @@ set response to button returned of (display dialog "This will remove Template Pr
 • Binary: /usr/local/bin/template-print
 • Workflow: /Library/PDF Services/TemplatePrint.workflow
 • Examples: /Users/Shared/PDFTemplates/examples
+• Bundled qpdf: /Library/Application Support/template-print/
 
 Continue with uninstallation?" buttons {"Cancel", "Uninstall"} default button "Cancel" cancel button "Cancel" with icon caution)
 return response
@@ -47,6 +51,26 @@ if [[ -d "$EXAMPLES_DEST" ]]; then
     echo "Removed examples: $EXAMPLES_DEST"
     # Clean up parent directory if it's empty (but don't remove /Users/Shared/PDFTemplates if user has other files)
     rmdir "$(dirname "$EXAMPLES_DEST")" 2>/dev/null || true
+fi
+
+# Remove bundled qpdf (only our bundled version, not system/Homebrew installations)
+if [[ -f "$QPDF_BIN" ]]; then
+    rm -f "$QPDF_BIN"
+    echo "Removed bundled qpdf: $QPDF_BIN"
+fi
+
+if [[ -d "$QPDF_LIB_DIR" ]]; then
+    rm -rf "$QPDF_LIB_DIR"
+    echo "Removed bundled qpdf libraries: $QPDF_LIB_DIR"
+fi
+
+# Remove Application Support directory if empty (but only if it's our directory)
+if [[ -d "$QPDF_SUPPORT_DIR" ]]; then
+    # Check if directory is empty (only our files should be there)
+    if [[ -z "$(ls -A "$QPDF_SUPPORT_DIR" 2>/dev/null)" ]]; then
+        rmdir "$QPDF_SUPPORT_DIR" 2>/dev/null || true
+        echo "Removed Application Support directory: $QPDF_SUPPORT_DIR"
+    fi
 fi
 
 # Remove uninstaller itself

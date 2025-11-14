@@ -5,11 +5,11 @@ DIST_DIR := dist
 ARCHIVE := template-print-$(VERSION).tar.gz
 PKG_SCRIPT := pkg/build_pkg.sh
 
-.PHONY: lint pkg pkg-macos archive install-workflow uninstall-workflow install-dev uninstall-dev clean distclean
+.PHONY: lint pkg pkg-macos archive install-workflow uninstall-workflow install-dev uninstall-dev prepare-qpdf clean-qpdf test test-unit test-integration clean distclean
 
 lint:
 	@command -v shellcheck >/dev/null 2>&1 || { echo "shellcheck is required for linting" >&2; exit 1; }
-	shellcheck files/template-print.sh scripts/install_workflow.sh scripts/uninstall_workflow.sh pkg/scripts/postinstall
+	shellcheck files/template-print.sh scripts/install_workflow.sh scripts/uninstall_workflow.sh scripts/prepare_qpdf.sh pkg/scripts/postinstall pkg/build_pkg.sh
 
 pkg: pkg-macos
 
@@ -53,6 +53,29 @@ uninstall-dev:
 	fi
 	@bash scripts/uninstall_workflow.sh -y
 	@echo "Development uninstallation complete."
+
+prepare-qpdf:
+	@echo "Preparing qpdf from source (this may take several minutes)..."
+	@bash scripts/prepare_qpdf.sh
+	@echo "qpdf preparation complete. Run 'make pkg' to build the installer."
+
+clean-qpdf:
+	@echo "Cleaning bundled qpdf..."
+	@rm -rf pkg/qpdf-bundled
+	@rm -rf pkg/qpdf-build
+	@echo "Bundled qpdf removed."
+
+test: test-unit test-integration
+
+test-unit:
+	@command -v bats >/dev/null 2>&1 || { echo "bats is required for testing. Install with: brew install bats-core" >&2; exit 1; }
+	@echo "Running unit tests..."
+	@bats tests/unit/
+
+test-integration:
+	@command -v bats >/dev/null 2>&1 || { echo "bats is required for testing. Install with: brew install bats-core" >&2; exit 1; }
+	@echo "Running integration tests..."
+	@bats tests/integration/
 
 clean:
 	rm -rf $(DIST_DIR)

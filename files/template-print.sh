@@ -71,7 +71,12 @@ detect_program() {
 
 resolve_qpdf() {
   local qpdf
-  if qpdf=$(detect_program /opt/homebrew/bin/qpdf /usr/local/bin/qpdf qpdf); then
+  # Check bundled qpdf first (isolated location, doesn't interfere with system/Homebrew installations)
+  if qpdf=$(detect_program \
+    "/Library/Application Support/template-print/bin/qpdf" \
+    /opt/homebrew/bin/qpdf \
+    /usr/local/bin/qpdf \
+    qpdf); then
     printf '%s\n' "${qpdf}"
     return 0
   fi

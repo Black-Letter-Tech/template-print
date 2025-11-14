@@ -23,6 +23,20 @@ else
     log "Warning: Binary not found at $BIN_DEST"
 fi
 
+# Ensure bundled qpdf has correct permissions
+QPDF_BIN="/Library/Application Support/template-print/bin/qpdf"
+QPDF_LIB_DIR="/Library/Application Support/template-print/lib"
+if [[ -f "$QPDF_BIN" ]]; then
+    chmod 755 "$QPDF_BIN"
+    log "Bundled qpdf installed: $QPDF_BIN"
+    
+    # Set permissions on bundled libraries if they exist
+    if [[ -d "$QPDF_LIB_DIR" ]]; then
+        chmod -R 755 "$QPDF_LIB_DIR"
+        log "Bundled qpdf libraries installed: $QPDF_LIB_DIR"
+    fi
+fi
+
 # Ensure workflow has correct permissions
 if [[ -d "$WORKFLOW_DEST" ]]; then
     chmod -R 755 "$WORKFLOW_DEST"
