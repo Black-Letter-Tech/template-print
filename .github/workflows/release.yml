@@ -1,0 +1,36 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-pkg:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build .pkg installer
+        run: |
+          make pkg
+
+      - name: Upload .pkg to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/template-print-*.pkg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Package info
+        run: |
+          PKG_FILE=$(ls dist/template-print-*.pkg)
+          PKG_SIZE=$(du -h "$PKG_FILE" | cut -f1)
+          echo "::notice::Package: $PKG_FILE"
+          echo "::notice::Size: $PKG_SIZE"
+          echo "::notice::Install by double-clicking the .pkg file or running: sudo installer -pkg '$PKG_FILE' -target /"

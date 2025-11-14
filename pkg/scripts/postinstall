@@ -1,0 +1,69 @@
+#!/bin/bash
+set -euo pipefail
+
+PKG_ID="com.blacklettertech.template-print"
+BIN_DEST="/usr/local/bin/template-print"
+WORKFLOW_DEST="/Library/PDF Services/TemplatePrint.workflow"
+EXAMPLES_STAGING="/Library/Application Support/template-print/examples"
+EXAMPLES_DEST="/Users/Shared/PDFTemplates/examples"
+UNINSTALLER_APP="/Applications/Utilities/Template Print Uninstaller.app"
+
+log() {
+    echo "[$PKG_ID] $*" >&2
+}
+
+# pkgbuild installs files automatically, we just need to ensure permissions and move examples
+log "Setting up installed files..."
+
+# Ensure binary is executable
+if [[ -f "$BIN_DEST" ]]; then
+    chmod 755 "$BIN_DEST"
+    log "Binary installed: $BIN_DEST"
+else
+    log "Warning: Binary not found at $BIN_DEST"
+fi
+
+# Ensure workflow has correct permissions
+if [[ -d "$WORKFLOW_DEST" ]]; then
+    chmod -R 755 "$WORKFLOW_DEST"
+    log "Workflow installed: $WORKFLOW_DEST"
+else
+    log "Warning: Workflow not found at $WORKFLOW_DEST"
+fi
+
+# Move examples from staging to /Users/Shared/PDFTemplates/examples
+if [[ -d "$EXAMPLES_STAGING" ]]; then
+    # Create destination directory if it doesn't exist
+    mkdir -p "$(dirname "$EXAMPLES_DEST")"
+    
+    # Remove existing examples directory if it exists
+    if [[ -d "$EXAMPLES_DEST" ]]; then
+        rm -rf "$EXAMPLES_DEST"
+    fi
+    
+    # Move examples to final location
+    mv "$EXAMPLES_STAGING" "$EXAMPLES_DEST"
+    chmod -R 755 "$EXAMPLES_DEST"
+    log "Examples installed: $EXAMPLES_DEST"
+    
+    # Clean up staging directory structure (only if empty)
+    STAGING_PARENT="$(dirname "$EXAMPLES_STAGING")"
+    if [[ -d "$STAGING_PARENT" ]] && [[ -z "$(ls -A "$STAGING_PARENT" 2>/dev/null)" ]]; then
+        rmdir "$STAGING_PARENT" 2>/dev/null || true
+    fi
+    STAGING_ROOT="/Library/Application Support/template-print"
+    if [[ -d "$STAGING_ROOT" ]] && [[ -z "$(ls -A "$STAGING_ROOT" 2>/dev/null)" ]]; then
+        rmdir "$STAGING_ROOT" 2>/dev/null || true
+    fi
+fi
+
+# Ensure uninstaller app has correct permissions
+if [[ -d "$UNINSTALLER_APP" ]]; then
+    chmod -R 755 "$UNINSTALLER_APP"
+    log "Uninstaller installed: $UNINSTALLER_APP"
+else
+    log "Warning: Uninstaller not found at $UNINSTALLER_APP"
+fi
+
+log "Installation complete. Template Print is available system-wide."
+exit 0
